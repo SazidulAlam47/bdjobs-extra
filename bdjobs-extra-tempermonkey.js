@@ -52,30 +52,6 @@
         }, 3000);
     }
 
-    // Render cancel button text with an icon similar to the native check button style
-    function setCancelButtonLabel(button, label = 'Cancel Application') {
-        button.innerHTML = '';
-        const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        icon.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-        icon.setAttribute('width', '20');
-        icon.setAttribute('height', '20');
-        icon.setAttribute('viewBox', '0 0 14 14');
-        icon.setAttribute('fill', 'none');
-        icon.setAttribute('aria-hidden', 'true');
-        icon.style.flexShrink = '0';
-
-        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        path.setAttribute('d', 'M4 4L10 10M10 4L4 10');
-        path.setAttribute('stroke', 'currentColor');
-        path.setAttribute('stroke-width', '1.8');
-        path.setAttribute('stroke-linecap', 'round');
-        path.setAttribute('stroke-linejoin', 'round');
-
-        icon.appendChild(path);
-        button.appendChild(icon);
-        button.appendChild(document.createTextNode(` ${label}`));
-    }
-
     // API Call to cancel the application
     function cancelApplication(jobId, formValue, button) {
         button.textContent = "Canceling...";
@@ -93,7 +69,7 @@
                 "Content-Type": "application/json"
             },
             onload: function (response) {
-                setCancelButtonLabel(button, 'Cancel Application');
+                button.textContent = 'Cancel Application';
                 button.disabled = false;
                 button.style.opacity = '1';
 
@@ -114,7 +90,7 @@
             },
             onerror: function (err) {
                 console.error("API Request failed:", err);
-                setCancelButtonLabel(button, 'Cancel Application');
+                button.textContent = 'Cancel Application';
                 button.disabled = false;
                 button.style.opacity = '1';
                 showToast("Network error occurred. Please try again.");
@@ -133,7 +109,7 @@
         let targetElement = null;
         let jobId = null;
 
-        const fallbackUiClass = 'flex items-center gap-[5px] px-4 py-2 font-medium border-2 border-[#f3e5f5] bg-[#fefbfe] text-[#a553b3] rounded sm:text-sm text-xs';
+        const filledUiClass = 'flex items-center gap-[5px] px-4 py-2 font-medium border border-[#B32D7D] bg-[#B32D7D] text-white rounded sm:text-sm text-xs hover:bg-[#8f2464]';
 
         if (isDetailsPage) {
             // Logic for the /h/details/ page
@@ -155,14 +131,10 @@
         if (targetElement) {
             const cancelBtn = document.createElement('button');
             cancelBtn.id = 'tm-cancel-app-btn';
-            setCancelButtonLabel(cancelBtn, 'Cancel Application');
+            cancelBtn.textContent = 'Cancel Application';
 
-            // Copy native classes when possible so the button matches current UI.
-            if (isDetailsPage && targetElement.className) {
-                cancelBtn.className = targetElement.className;
-            } else {
-                cancelBtn.className = fallbackUiClass;
-            }
+            // Use a filled style so the action looks like a regular button instead of outlined.
+            cancelBtn.className = filledUiClass;
 
             if (isApplyNextPage) {
                 cancelBtn.style.marginTop = '15px';
