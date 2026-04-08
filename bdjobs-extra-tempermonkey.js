@@ -342,8 +342,22 @@
                     if (res.statuscode === "1" && res.data && res.data.JobData) {
                         const jd = res.data.JobData;
 
-                        // Helper to format values
-                        const formatVal = (val) => val === -1 ? 'Not Defined' : val;
+                        // Helper to format values (returns HTML with infinity symbol in larger font)
+                        const formatVal = (val) => val === -1 ? '<span style="font-size: 18px;">&infin;</span>' : val;
+
+                        // Helper to format gender abbreviations to full names
+                        const formatGender = (gender) => {
+                            if (!gender) return '<span style="font-size: 18px;">&infin;</span>';
+                            return gender
+                                .split(',')
+                                .map(g => {
+                                    const trimmed = g.trim();
+                                    if (trimmed === 'M') return 'Male';
+                                    if (trimmed === 'F') return 'Female';
+                                    return trimmed;
+                                })
+                                .join(' and ');
+                        };
 
                         box.innerHTML = `
                             <h3 class="mb-2.5 text-[#B32D7D] text-base font-semibold"> Extra Job Details </h3>
@@ -362,19 +376,7 @@
                                 </li>
                                 <li class="flex gap-1 items-center">
                                     <span class="min-w-fit">Required Gender:</span>
-                                    <span class="font-semibold">${jd.RequiredGender ? jd.RequiredGender : 'Not Defined'}</span>
-                                </li>
-                                <li class="flex gap-1 items-center">
-                                    <span class="min-w-fit">Restricted Age:</span>
-                                    <span class="font-semibold">${jd.DidCompanyRestrictedAge}</span>
-                                </li>
-                                <li class="flex gap-1 items-center">
-                                    <span class="min-w-fit">Restricted Experience:</span>
-                                    <span class="font-semibold">${jd.DidCompanyRestrictedExperience}</span>
-                                </li>
-                                <li class="flex gap-1 items-center">
-                                    <span class="min-w-fit">Restricted Gender:</span>
-                                    <span class="font-semibold">${jd.DidCompanyRestrictedGender}</span>
+                                    <span class="font-semibold">${formatGender(jd.RequiredGender)}</span>
                                 </li>
                             </ul>
                         `;
