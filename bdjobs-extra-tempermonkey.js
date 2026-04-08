@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Bdjobs Cancel Application
+// @name         Bdjobs Extra Tools
 // @namespace    http://tampermonkey.net/
-// @version      1.2
-// @description  Adds a "Cancel Application" button next to the "Already Applied" button on bdjobs.com and apply_position_next page
+// @version      1.3
+// @description  Adds a UI-matched Cancel Application button and extra job details on bdjobs.com job pages
 // @author       You
 // @match        *://*.bdjobs.com/h/details/*
 // @match        *://mybdjobs.bdjobs.com/mybdjobs/apply_position_next.asp*
@@ -52,6 +52,30 @@
         }, 3000);
     }
 
+    // Render cancel button text with an icon similar to the native check button style
+    function setCancelButtonLabel(button, label = 'Cancel Application') {
+        button.innerHTML = '';
+        const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        icon.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+        icon.setAttribute('width', '20');
+        icon.setAttribute('height', '20');
+        icon.setAttribute('viewBox', '0 0 14 14');
+        icon.setAttribute('fill', 'none');
+        icon.setAttribute('aria-hidden', 'true');
+        icon.style.flexShrink = '0';
+
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', 'M4 4L10 10M10 4L4 10');
+        path.setAttribute('stroke', 'currentColor');
+        path.setAttribute('stroke-width', '1.8');
+        path.setAttribute('stroke-linecap', 'round');
+        path.setAttribute('stroke-linejoin', 'round');
+
+        icon.appendChild(path);
+        button.appendChild(icon);
+        button.appendChild(document.createTextNode(` ${label}`));
+    }
+
     // API Call to cancel the application
     function cancelApplication(jobId, formValue, button) {
         button.textContent = "Canceling...";
@@ -69,7 +93,7 @@
                 "Content-Type": "application/json"
             },
             onload: function (response) {
-                button.textContent = "Cancel Application";
+                setCancelButtonLabel(button, 'Cancel Application');
                 button.disabled = false;
                 button.style.opacity = '1';
 
@@ -90,7 +114,7 @@
             },
             onerror: function (err) {
                 console.error("API Request failed:", err);
-                button.textContent = "Cancel Application";
+                setCancelButtonLabel(button, 'Cancel Application');
                 button.disabled = false;
                 button.style.opacity = '1';
                 showToast("Network error occurred. Please try again.");
@@ -109,19 +133,7 @@
         let targetElement = null;
         let jobId = null;
 
-        // Common danger button styles
-        let stylingOptions = {
-            color: '#ef4444',            // Red text
-            backgroundColor: '#fef2f2',  // Light red background
-            borderColor: '#fca5a5',      // Red border
-            borderWidth: '2px',
-            borderStyle: 'solid',
-            borderRadius: '4px',
-            padding: '8px 16px',
-            fontSize: '14px',
-            fontWeight: '500',
-            cursor: 'pointer'
-        };
+        const fallbackUiClass = 'flex items-center gap-[5px] px-4 py-2 font-medium border-2 border-[#f3e5f5] bg-[#fefbfe] text-[#a553b3] rounded sm:text-sm text-xs';
 
         if (isDetailsPage) {
             // Logic for the /h/details/ page
@@ -138,22 +150,26 @@
             targetElement = document.querySelector('div.adeadline');
             const urlParams = new URLSearchParams(window.location.search);
             jobId = urlParams.get('jpId');
-            stylingOptions.marginTop = '15px';
-            stylingOptions.display = 'inline-block';
         }
 
         if (targetElement) {
             const cancelBtn = document.createElement('button');
             cancelBtn.id = 'tm-cancel-app-btn';
-            cancelBtn.textContent = 'Cancel Application';
+            setCancelButtonLabel(cancelBtn, 'Cancel Application');
 
-            // Try copying native classes if on details page
+            // Copy native classes when possible so the button matches current UI.
             if (isDetailsPage && targetElement.className) {
                 cancelBtn.className = targetElement.className;
+            } else {
+                cancelBtn.className = fallbackUiClass;
             }
 
-            // Apply our custom styles
-            Object.assign(cancelBtn.style, stylingOptions);
+            if (isApplyNextPage) {
+                cancelBtn.style.marginTop = '15px';
+                cancelBtn.style.display = 'inline-flex';
+            }
+
+            cancelBtn.style.cursor = 'pointer';
 
             // Handle the click event
             cancelBtn.addEventListener('click', (e) => {
@@ -215,26 +231,26 @@
                         const jd = res.data.JobData;
 
                         // Helper to format values
-                        const formatVal = (val) => val === -1 ? 'not defined' : val;
+                        const formatVal = (val) => val === -1 ? 'Not Defined' : val;
 
                         box.innerHTML = `
                             <h3 class="mb-2.5 text-[#B32D7D] text-base font-semibold"> Extra Job Details </h3>
                             <ul class="ml-6 list-none grid grid-cols-1 sm:grid sm:grid-cols-2 md:grid md:grid-cols-2 sm:gap-1 md:gap-2 gap-2 summary-des text-sm font-normal text-[#333]">
                                 <li class="flex gap-1 items-center">
                                     <span class="min-w-fit">Salary Range:</span>
-                                    <span class="font-semibold">${formatVal(jd.MinimumSalary)} - ${formatVal(jd.MaximumSalary)}</span>
+                                    <span class="font-semibold">Tk. ${formatVal(jd.MinimumSalary)} - ${formatVal(jd.MaximumSalary)} (Monthly)</span>
                                 </li>
                                 <li class="flex gap-1 items-center">
                                     <span class="min-w-fit">Age Range:</span>
-                                    <span class="font-semibold">${formatVal(jd.RequiredMinimumAge)} - ${formatVal(jd.RequiredMaximumAge)} years</span>
+                                    <span class="font-semibold">${formatVal(jd.RequiredMinimumAge)} to ${formatVal(jd.RequiredMaximumAge)} years</span>
                                 </li>
                                 <li class="flex gap-1 items-center">
                                     <span class="min-w-fit">Experience Range:</span>
-                                    <span class="font-semibold">${formatVal(jd.RequiredMinimumExperience)} - ${formatVal(jd.RequiredMaximumExperience)} years</span>
+                                    <span class="font-semibold">${formatVal(jd.RequiredMinimumExperience)} to ${formatVal(jd.RequiredMaximumExperience)} years</span>
                                 </li>
                                 <li class="flex gap-1 items-center">
                                     <span class="min-w-fit">Required Gender:</span>
-                                    <span class="font-semibold">${jd.RequiredGender ? jd.RequiredGender : 'not defined'}</span>
+                                    <span class="font-semibold">${jd.RequiredGender ? jd.RequiredGender : 'Not Defined'}</span>
                                 </li>
                                 <li class="flex gap-1 items-center">
                                     <span class="min-w-fit">Restricted Age:</span>
