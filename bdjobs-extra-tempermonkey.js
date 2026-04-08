@@ -52,6 +52,112 @@
         }, 3000);
     }
 
+    // Show confirmation modal before canceling application
+    function showConfirmationModal(jobTitle, companyName, onConfirm) {
+        // Create modal overlay
+        const overlay = document.createElement('div');
+        overlay.id = 'tm-modal-overlay';
+        Object.assign(overlay.style, {
+            position: 'fixed',
+            top: '0',
+            left: '0',
+            width: '100%',
+            height: '100%',
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: '100000'
+        });
+
+        // Create modal box
+        const modal = document.createElement('div');
+        Object.assign(modal.style, {
+            position: 'relative',
+            backgroundColor: '#fff',
+            borderRadius: '8px',
+            padding: '24px',
+            maxWidth: '400px',
+            boxShadow: '0 10px 25px rgba(0, 0, 0, 0.2)',
+            fontFamily: 'Arial, sans-serif'
+        });
+
+        // Modal title
+        const title = document.createElement('h2');
+        title.textContent = 'Confirm Cancellation';
+        Object.assign(title.style, {
+            margin: '0 0 16px 0',
+            fontSize: '18px',
+            fontWeight: 'bold',
+            color: '#333'
+        });
+        modal.appendChild(title);
+
+        // Modal message
+        const message = document.createElement('p');
+        message.innerHTML = `Do you really want to undo the job application?<br><br><strong>${jobTitle}</strong><br>${companyName}`;
+        Object.assign(message.style, {
+            margin: '0 0 20px 0',
+            fontSize: '14px',
+            color: '#555',
+            lineHeight: '1.5'
+        });
+        modal.appendChild(message);
+
+        // Button container
+        const buttonContainer = document.createElement('div');
+        Object.assign(buttonContainer.style, {
+            display: 'flex',
+            gap: '10px',
+            justifyContent: 'flex-end'
+        });
+
+        // No button
+        const noBtn = document.createElement('button');
+        noBtn.textContent = 'No';
+        Object.assign(noBtn.style, {
+            padding: '8px 16px',
+            fontSize: '14px',
+            fontWeight: '500',
+            border: '1px solid #ddd',
+            borderRadius: '4px',
+            backgroundColor: '#f5f5f5',
+            color: '#333',
+            cursor: 'pointer',
+            transition: 'background-color 0.2s'
+        });
+        noBtn.addEventListener('click', () => overlay.remove());
+        noBtn.addEventListener('mouseover', () => noBtn.style.backgroundColor = '#eee');
+        noBtn.addEventListener('mouseout', () => noBtn.style.backgroundColor = '#f5f5f5');
+        buttonContainer.appendChild(noBtn);
+
+        // Yes button
+        const yesBtn = document.createElement('button');
+        yesBtn.textContent = 'Yes';
+        Object.assign(yesBtn.style, {
+            padding: '8px 16px',
+            fontSize: '14px',
+            fontWeight: '500',
+            border: 'none',
+            borderRadius: '4px',
+            backgroundColor: '#B32D7D',
+            color: '#fff',
+            cursor: 'pointer',
+            transition: 'background-color 0.2s'
+        });
+        yesBtn.addEventListener('click', () => {
+            overlay.remove();
+            onConfirm();
+        });
+        yesBtn.addEventListener('mouseover', () => yesBtn.style.backgroundColor = '#8f2464');
+        yesBtn.addEventListener('mouseout', () => yesBtn.style.backgroundColor = '#B32D7D');
+        buttonContainer.appendChild(yesBtn);
+
+        modal.appendChild(buttonContainer);
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+    }
+
     // API Call to cancel the application
     function cancelApplication(jobId, formValue, button) {
         button.textContent = "Canceling...";
@@ -160,7 +266,41 @@
                     return;
                 }
 
-                cancelApplication(jobId, formValue, cancelBtn);
+                // Fetch job details from API to get accurate title and company name
+                const apiUrl = `https://testmongo.bdjobs.com/job-apply/api/JobSubsystem/JobApply?jobID=${jobId}`;
+                GM_xmlhttpRequest({
+                    method: "GET",
+                    url: apiUrl,
+                    headers: {
+                        "Accept": "application/json"
+                    },
+                    onload: function (response) {
+                        let jobTitle = 'This Job';
+                        let companyName = 'This Company';
+
+                        try {
+                            const data = JSON.parse(response.responseText);
+                            if (data.statuscode === "1" && data.data && data.data.JobData) {
+                                jobTitle = data.data.JobData.JobTitle || jobTitle;
+                                companyName = data.data.JobData.CompanyName || companyName;
+                            }
+                        } catch (e) {
+                            console.error("Error parsing job data:", e);
+                        }
+
+                        // Show confirmation modal with fetched data
+                        showConfirmationModal(jobTitle, companyName, () => {
+                            cancelApplication(jobId, formValue, cancelBtn);
+                        });
+                    },
+                    onerror: function (err) {
+                        console.error("Failed to fetch job details:", err);
+                        // Still show modal with default values
+                        showConfirmationModal('This Job', 'This Company', () => {
+                            cancelApplication(jobId, formValue, cancelBtn);
+                        });
+                    }
+                });
             });
 
             // Insert exactly after the targeted element
