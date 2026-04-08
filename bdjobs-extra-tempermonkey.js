@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bdjobs Cancel Application
 // @namespace    http://tampermonkey.net/
-// @version      1.1
+// @version      1.2
 // @description  Adds a "Cancel Application" button next to the "Already Applied" button on bdjobs.com and apply_position_next page
 // @author       You
 // @match        *://*.bdjobs.com/h/details/*
@@ -9,7 +9,7 @@
 // @grant        GM_xmlhttpRequest
 // ==/UserScript==
 
-(function() {
+(function () {
     'use strict';
 
     // Helper function to extract a specific cookie by name
@@ -68,7 +68,7 @@
                 "Accept": "application/json",
                 "Content-Type": "application/json"
             },
-            onload: function(response) {
+            onload: function (response) {
                 button.textContent = "Cancel Application";
                 button.disabled = false;
                 button.style.opacity = '1';
@@ -88,7 +88,7 @@
                     showToast("Unexpected response from server.");
                 }
             },
-            onerror: function(err) {
+            onerror: function (err) {
                 console.error("API Request failed:", err);
                 button.textContent = "Cancel Application";
                 button.disabled = false;
@@ -180,15 +180,114 @@
         }
     }
 
+    // Function to fetch and inject extra job data
+    function fetchAndInjectExtraData(jobId) {
+        // Prevent duplicate injections
+        if (document.getElementById('tm-extra-data-box')) return;
+
+        const allSection = document.getElementById('allSection');
+        if (!allSection) return;
+
+        // Create a placeholder box to prevent multiple API calls while waiting
+        const box = document.createElement('div');
+        box.id = 'tm-extra-data-box';
+        box.className = 'mb-2.5 text-sm font-normal text-[#333] rounded border-[0.5px] border-[#DDDDDD] bg-[#F4F4F4] flex flex-col px-5 py-4 mt-4';
+        box.innerHTML = `
+            <h3 class="mb-2.5 text-[#B32D7D] text-base font-semibold"> Extra Job Details </h3>
+            <p class="text-sm">Loading...</p>
+        `;
+
+        // Insert right after the allSection element
+        allSection.parentNode.insertBefore(box, allSection.nextSibling);
+
+        const apiUrl = `https://testmongo.bdjobs.com/job-apply/api/JobSubsystem/JobApply?jobID=${jobId}`;
+
+        GM_xmlhttpRequest({
+            method: "GET",
+            url: apiUrl,
+            headers: {
+                "Accept": "application/json"
+            },
+            onload: function (response) {
+                try {
+                    const res = JSON.parse(response.responseText);
+                    if (res.statuscode === "1" && res.data && res.data.JobData) {
+                        const jd = res.data.JobData;
+
+                        // Helper to format values
+                        const formatVal = (val) => val === -1 ? 'not defined' : val;
+
+                        box.innerHTML = `
+                            <h3 class="mb-2.5 text-[#B32D7D] text-base font-semibold"> Extra Job Details </h3>
+                            <ul class="ml-6 list-none grid grid-cols-1 sm:grid sm:grid-cols-2 md:grid md:grid-cols-2 sm:gap-1 md:gap-2 gap-2 summary-des text-sm font-normal text-[#333]">
+                                <li class="flex gap-1 items-center">
+                                    <span class="min-w-fit">Salary Range:</span>
+                                    <span class="font-semibold">${formatVal(jd.MinimumSalary)} - ${formatVal(jd.MaximumSalary)}</span>
+                                </li>
+                                <li class="flex gap-1 items-center">
+                                    <span class="min-w-fit">Age Range:</span>
+                                    <span class="font-semibold">${formatVal(jd.RequiredMinimumAge)} - ${formatVal(jd.RequiredMaximumAge)} years</span>
+                                </li>
+                                <li class="flex gap-1 items-center">
+                                    <span class="min-w-fit">Experience Range:</span>
+                                    <span class="font-semibold">${formatVal(jd.RequiredMinimumExperience)} - ${formatVal(jd.RequiredMaximumExperience)} years</span>
+                                </li>
+                                <li class="flex gap-1 items-center">
+                                    <span class="min-w-fit">Required Gender:</span>
+                                    <span class="font-semibold">${jd.RequiredGender ? jd.RequiredGender : 'not defined'}</span>
+                                </li>
+                                <li class="flex gap-1 items-center">
+                                    <span class="min-w-fit">Restricted Age:</span>
+                                    <span class="font-semibold">${jd.DidCompanyRestrictedAge}</span>
+                                </li>
+                                <li class="flex gap-1 items-center">
+                                    <span class="min-w-fit">Restricted Experience:</span>
+                                    <span class="font-semibold">${jd.DidCompanyRestrictedExperience}</span>
+                                </li>
+                                <li class="flex gap-1 items-center">
+                                    <span class="min-w-fit">Restricted Gender:</span>
+                                    <span class="font-semibold">${jd.DidCompanyRestrictedGender}</span>
+                                </li>
+                            </ul>
+                        `;
+                    } else {
+                        box.innerHTML += `<p class="text-sm text-red-500">Failed to load extra data.</p>`;
+                    }
+                } catch (e) {
+                    box.innerHTML += `<p class="text-sm text-red-500">Error parsing extra data.</p>`;
+                }
+            },
+            onerror: function (err) {
+                box.innerHTML += `<p class="text-sm text-red-500">Network error fetching data.</p>`;
+            }
+        });
+    }
+
     // Bdjobs is likely a Single Page Application (SPA), so we use a MutationObserver
     // to detect when the UI updates and the element is rendered.
     const observer = new MutationObserver(() => {
         injectCancelButton();
+
+        // Also try to inject the extra data box if on the details page
+        if (window.location.pathname.includes('/h/details/')) {
+            const urlMatch = window.location.pathname.match(/\/details\/(\d+)/);
+            if (urlMatch && urlMatch[1]) {
+                fetchAndInjectExtraData(urlMatch[1]);
+            }
+        }
     });
 
     observer.observe(document.body, { childList: true, subtree: true });
 
     // Also try running it once on initial load just in case
-    setTimeout(injectCancelButton, 1000);
+    setTimeout(() => {
+        injectCancelButton();
+        if (window.location.pathname.includes('/h/details/')) {
+            const urlMatch = window.location.pathname.match(/\/details\/(\d+)/);
+            if (urlMatch && urlMatch[1]) {
+                fetchAndInjectExtraData(urlMatch[1]);
+            }
+        }
+    }, 1000);
 
 })();
