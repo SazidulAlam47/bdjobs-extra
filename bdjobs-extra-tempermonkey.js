@@ -342,12 +342,14 @@
                     if (res.statuscode === "1" && res.data && res.data.JobData) {
                         const jd = res.data.JobData;
 
+                        const infinitySpan = '<span style="font-size: 18px;">&infin;</span>';
+
                         // Helper to format values (returns HTML with infinity symbol in larger font)
-                        const formatVal = (val) => val === -1 ? '<span style="font-size: 18px;">&infin;</span>' : val;
+                        const formatVal = (val) => val === -1 ? infinitySpan : val;
 
                         // Helper to format gender abbreviations to full names
                         const formatGender = (gender) => {
-                            if (!gender) return '<span style="font-size: 18px;">&infin;</span>';
+                            if (!gender || !String(gender).trim()) return 'Not specified';
                             return gender
                                 .split(',')
                                 .map(g => {
@@ -367,28 +369,37 @@
                                     <span class="font-semibold">Tk. ${formatVal(jd.MinimumSalary)} - ${formatVal(jd.MaximumSalary)} (Monthly)</span>
                                 </li>
                                 <li class="flex gap-1 items-center">
-                                    <span class="min-w-fit">Age Range:</span>
-                                    <span class="font-semibold">${formatVal(jd.RequiredMinimumAge)} to ${formatVal(jd.RequiredMaximumAge)} years</span>
+                                    <span class="min-w-fit">Required Gender:</span>
+                                    <span class="font-semibold">${formatGender(jd.RequiredGender)}</span>
                                 </li>
                                 <li class="flex gap-1 items-center">
                                     <span class="min-w-fit">Experience Range:</span>
                                     <span class="font-semibold">${formatVal(jd.RequiredMinimumExperience)} to ${formatVal(jd.RequiredMaximumExperience)} years</span>
                                 </li>
                                 <li class="flex gap-1 items-center">
-                                    <span class="min-w-fit">Required Gender:</span>
-                                    <span class="font-semibold">${formatGender(jd.RequiredGender)}</span>
+                                    <span class="min-w-fit">Age Range:</span>
+                                    <span class="font-semibold">${formatVal(jd.RequiredMinimumAge)} to ${formatVal(jd.RequiredMaximumAge)} years</span>
                                 </li>
                             </ul>
                         `;
                     } else {
-                        box.innerHTML += `<p class="text-sm text-red-500">Failed to load extra data.</p>`;
+                        box.innerHTML = `
+                            <h3 class="mb-2.5 text-[#B32D7D] text-base font-semibold"> Extra Job Details </h3>
+                            <p class="text-sm text-red-500">Failed to load extra data.</p>
+                        `;
                     }
                 } catch (e) {
-                    box.innerHTML += `<p class="text-sm text-red-500">Error parsing extra data.</p>`;
+                    box.innerHTML = `
+                        <h3 class="mb-2.5 text-[#B32D7D] text-base font-semibold"> Extra Job Details </h3>
+                        <p class="text-sm text-red-500">Error parsing extra data.</p>
+                    `;
                 }
             },
             onerror: function (err) {
-                box.innerHTML += `<p class="text-sm text-red-500">Network error fetching data.</p>`;
+                box.innerHTML = `
+                    <h3 class="mb-2.5 text-[#B32D7D] text-base font-semibold"> Extra Job Details </h3>
+                    <p class="text-sm text-red-500">Network error fetching data.</p>
+                `;
             }
         });
     }
