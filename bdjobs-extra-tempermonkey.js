@@ -3,6 +3,7 @@
 // @namespace    http://tampermonkey.net/
 // @version      1.3
 // @description  Adds a UI-matched Cancel Application button and extra job details on bdjobs.com job pages
+// @icon         https://bdjobs.com/h/favicon.ico
 // @author       You
 // @match        *://*.bdjobs.com/h/details/*
 // @match        *://mybdjobs.bdjobs.com/mybdjobs/apply_position_next.asp*
