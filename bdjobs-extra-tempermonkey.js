@@ -5,8 +5,7 @@
 // @description  Adds a UI-matched Cancel Application button and extra job details on bdjobs.com job pages
 // @icon         https://bdjobs.com/h/favicon.ico
 // @author       You
-// @match        *://*.bdjobs.com/h/details/*
-// @match        *://mybdjobs.bdjobs.com/mybdjobs/apply_position_next.asp*
+// @match        *://*.bdjobs.com/*
 // @grant        GM_xmlhttpRequest
 // ==/UserScript==
 
@@ -244,8 +243,18 @@
             cancelBtn.className = filledUiClass;
 
             if (isApplyNextPage) {
+                cancelBtn.style.backgroundColor = '#B32D7D';
+                cancelBtn.style.border = '1px solid #B32D7D';
+                cancelBtn.style.color = '#fff';
+                cancelBtn.style.padding = '8px 16px';
+                cancelBtn.style.borderRadius = '6px';
+                cancelBtn.style.fontSize = '14px';
+                cancelBtn.style.fontWeight = '500';
+                cancelBtn.style.lineHeight = '1.2';
                 cancelBtn.style.marginTop = '15px';
                 cancelBtn.style.display = 'inline-flex';
+                cancelBtn.style.alignItems = 'center';
+                cancelBtn.style.gap = '5px';
             }
 
             cancelBtn.style.cursor = 'pointer';
