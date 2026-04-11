@@ -315,7 +315,7 @@
                 const rawScore = applyData && applyData.data ? applyData.data.matchingScore : null;
                 const matchingScore = Number.isFinite(Number(rawScore)) ? Number(rawScore) : 0;
                 showMatchingScoreModal(matchingScore, () => {
-                    window.location.reload();
+                    switchToAppliedButtons();
                 });
             } else {
                 showToast(sanitizeMessage(applyData.message) || 'Apply failed.');
@@ -351,6 +351,28 @@
         });
 
         applyNowBtn.parentNode.insertBefore(quickApplyBtn, applyNowBtn.nextSibling);
+    }
+
+    function switchToAppliedButtons() {
+        if (!window.location.pathname.includes('/h/details/')) return;
+
+        const applyNowBtn = document.querySelector('button[data-testid="applyNowBtn"]');
+        const quickApplyBtn = document.getElementById('tm-quick-apply-btn');
+
+        if (!applyNowBtn || !applyNowBtn.parentNode) return;
+
+        const alreadyAppliedBtn = document.createElement('button');
+        alreadyAppliedBtn.type = 'button';
+        alreadyAppliedBtn.className = 'flex items-center gap-[5px] px-4 py-2 font-medium border-2 border-[#f3e5f5] bg-[#fefbfe] text-[#a553b3] rounded sm:text-sm text-xs';
+        alreadyAppliedBtn.innerHTML = '<span class="icon-check-sign"></span> Already Applied';
+
+        applyNowBtn.parentNode.replaceChild(alreadyAppliedBtn, applyNowBtn);
+
+        if (quickApplyBtn && quickApplyBtn.parentNode) {
+            quickApplyBtn.remove();
+        }
+
+        injectCancelButton();
     }
 
     // Show confirmation modal before canceling application
