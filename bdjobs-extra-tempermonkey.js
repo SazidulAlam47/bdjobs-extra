@@ -312,10 +312,11 @@
             });
             if (applyData.statuscode === '1' || applyData.statuscode === 1) {
                 showToast('Job successfully applied.');
+                switchToAppliedButtons();
                 const rawScore = applyData && applyData.data ? applyData.data.matchingScore : null;
                 const matchingScore = Number.isFinite(Number(rawScore)) ? Number(rawScore) : 0;
                 showMatchingScoreModal(matchingScore, () => {
-                    switchToAppliedButtons();
+                    // No action needed on OK. Buttons are already updated.
                 });
             } else {
                 showToast(sanitizeMessage(applyData.message) || 'Apply failed.');
@@ -373,6 +374,41 @@
         }
 
         injectCancelButton();
+    }
+
+    function switchToNotAppliedButtons() {
+        if (!window.location.pathname.includes('/h/details/')) return;
+
+        const buttons = Array.from(document.querySelectorAll('button'));
+        const alreadyAppliedBtn = buttons.find(btn =>
+            btn.textContent.trim().toLowerCase() === 'already applied' ||
+            btn.className.includes('text-[#a553b3]')
+        );
+
+        if (!alreadyAppliedBtn || !alreadyAppliedBtn.parentNode) return;
+
+        const applyNowBtn = document.createElement('button');
+        applyNowBtn.type = 'button';
+        applyNowBtn.setAttribute('data-testid', 'applyNowBtn');
+        applyNowBtn.className = 'bg-[#008020] hover:bg-[#02651C] max-h-[40px] text-white text-sm font-medium py-[11px] px-3 rounded cursor-pointer';
+        applyNowBtn.textContent = 'Apply Now';
+        applyNowBtn.addEventListener('click', () => {
+            const redirectJobId = getJobIdFromDetailsPage();
+            if (!redirectJobId) {
+                showToast('Error: Could not extract Job ID from URL.');
+                return;
+            }
+            window.location.href = `https://bdjobs.com/h/apply-online/${redirectJobId}`;
+        });
+
+        alreadyAppliedBtn.parentNode.replaceChild(applyNowBtn, alreadyAppliedBtn);
+
+        const cancelBtn = document.getElementById('tm-cancel-app-btn');
+        if (cancelBtn && cancelBtn.parentNode) {
+            cancelBtn.remove();
+        }
+
+        injectQuickApplyButton();
     }
 
     // Show confirmation modal before canceling application
@@ -499,11 +535,9 @@
 
             showToast(data.message || 'Action completed.');
 
-            // If successfully canceled, reload the page after a short delay
+            // If successfully canceled, update the action buttons without reloading.
             if (data.statuscode === '1' || data.statuscode === 1) {
-                setTimeout(() => {
-                    window.location.reload();
-                }, 1500);
+                switchToNotAppliedButtons();
             }
         } catch (err) {
             console.error('API Request failed:', err);
