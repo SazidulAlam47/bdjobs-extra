@@ -355,7 +355,8 @@
                         const infinitySpan = '<span style="font-size: 18px;">&infin;</span>';
 
                         // Helper to format values (returns HTML with infinity symbol in larger font)
-                        const formatVal = (val) => val === -1 ? infinitySpan : val;
+                        const formatMaxVal = (val) => val === -1 ? infinitySpan : val;
+                        const formatMinVal = (val) => val === -1 ? '0' : val;
 
                         // Helper to format gender abbreviations to full names
                         const formatGender = (gender) => {
@@ -376,7 +377,7 @@
                             <ul class="ml-6 list-none grid grid-cols-1 sm:grid sm:grid-cols-2 md:grid md:grid-cols-2 sm:gap-1 md:gap-2 gap-2 summary-des text-sm font-normal text-[#333]">
                                 <li class="flex gap-1 items-center">
                                     <span class="min-w-fit">Salary Range:</span>
-                                    <span class="font-semibold">Tk. ${formatVal(jd.MinimumSalary)} - ${formatVal(jd.MaximumSalary)} (Monthly)</span>
+                                    <span class="font-semibold">Tk. ${formatMinVal(jd.MinimumSalary)} - ${formatMaxVal(jd.MaximumSalary)} (Monthly)</span>
                                 </li>
                                 <li class="flex gap-1 items-center">
                                     <span class="min-w-fit">Required Gender:</span>
@@ -384,11 +385,11 @@
                                 </li>
                                 <li class="flex gap-1 items-center">
                                     <span class="min-w-fit">Experience Range:</span>
-                                    <span class="font-semibold">${formatVal(jd.RequiredMinimumExperience)} to ${formatVal(jd.RequiredMaximumExperience)} years</span>
+                                    <span class="font-semibold">${formatMinVal(jd.RequiredMinimumExperience)} to ${formatMaxVal(jd.RequiredMaximumExperience)} years</span>
                                 </li>
                                 <li class="flex gap-1 items-center">
                                     <span class="min-w-fit">Age Range:</span>
-                                    <span class="font-semibold">${formatVal(jd.RequiredMinimumAge)} to ${formatVal(jd.RequiredMaximumAge)} years</span>
+                                    <span class="font-semibold">${formatMinVal(jd.RequiredMinimumAge)} to ${formatMaxVal(jd.RequiredMaximumAge)} years</span>
                                 </li>
                             </ul>
                         `;
