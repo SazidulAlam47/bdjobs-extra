@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Bdjobs Extra Tools
 // @namespace    http://tampermonkey.net/
-// @version      1.3
-// @description  Adds a UI-matched Cancel Application button and extra job details on bdjobs.com job pages
+// @version      1.4
+// @description  Adds Cancel Application, Quick Apply, and extra job details on bdjobs.com job pages
 // @icon         https://bdjobs.com/h/favicon.ico
 // @author       You
 // @match        *://*.bdjobs.com/*
@@ -20,6 +20,41 @@
         return null;
     }
 
+    function getJobIdFromDetailsPage() {
+        const urlMatch = window.location.pathname.match(/\/details\/(\d+)/);
+        return urlMatch ? urlMatch[1] : null;
+    }
+
+    function sanitizeMessage(message) {
+        if (!message) return 'Unknown error.';
+        return String(message).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    }
+
+    async function fetchJson(url, options = {}) {
+        const response = await fetch(url, {
+            credentials: 'include',
+            ...options,
+            headers: {
+                Accept: 'application/json',
+                ...(options.headers || {})
+            }
+        });
+
+        const text = await response.text();
+        let json = {};
+        try {
+            json = text ? JSON.parse(text) : {};
+        } catch (e) {
+            throw new Error('Invalid JSON response from server.');
+        }
+
+        if (!response.ok) {
+            throw new Error((json && json.message) || `Request failed with status ${response.status}.`);
+        }
+
+        return json;
+    }
+
     // Helper function to show a temporary toast message
     function showToast(message) {
         const toast = document.createElement('div');
@@ -35,6 +70,7 @@
             zIndex: '99999',
             fontFamily: 'sans-serif',
             fontSize: '14px',
+            maxWidth: '420px',
             boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
             opacity: '0',
             transition: 'opacity 0.3s ease-in-out'
@@ -50,6 +86,110 @@
             toast.style.opacity = '0';
             setTimeout(() => toast.remove(), 300);
         }, 3000);
+    }
+
+    async function quickApply(jobId, button) {
+        button.textContent = 'Applying...';
+        button.disabled = true;
+        button.style.opacity = '0.7';
+
+        const formValue = getCookie('MybdjobsUserId');
+        console.log({ formValue });
+
+        if (!jobId) {
+            showToast('Error: Could not extract Job ID from URL.');
+            button.textContent = 'Quick Apply';
+            button.disabled = false;
+            button.style.opacity = '1';
+            return;
+        }
+
+        if (!formValue) {
+            showToast('Error: Could not extract MybdjobsUserId cookie.');
+            button.textContent = 'Quick Apply';
+            button.disabled = false;
+            button.style.opacity = '1';
+            return;
+        }
+
+        try {
+            const jobData = await fetchJson(`https://testmongo.bdjobs.com/job-apply/api/JobSubsystem/JobApply?jobID=${jobId}&formValue=${encodeURIComponent(formValue)}`);
+
+            const jobApiData = jobData && jobData.data && jobData.data.JobData ? jobData.data.JobData : null;
+            const userApiData = jobData && jobData.data && jobData.data.UserData ? jobData.data.UserData : null;
+            if (!(jobData.statuscode === '1' || jobData.statuscode === 1) || !jobApiData) {
+                throw new Error(jobData.message || 'Unable to load job details.');
+            }
+
+            const applicantName = userApiData && userApiData.Name ? String(userApiData.Name).trim() : 'Applicant Name';
+
+            if (!applicantName) {
+                throw new Error('Could not get applicant name from JobApply user data.');
+            }
+
+            const payload = {
+                expectedSalary: Number(jobApiData.MinimumSalary) || 0,
+                jobId: Number(jobId),
+                formValue: encodeURIComponent(formValue),
+                applicantName,
+                adType: 2,
+                currentSalary: 0,
+                isVideoResumePreferred: false,
+                isVideoResumeFound: 0,
+                companyName: jobApiData.CompanyName || 'Company Name',
+                packageId: 0,
+                package_total_limit: Number(userApiData && userApiData.Limit) || 75,
+                package_total_limit_used: Number(userApiData && userApiData.Used) || 0,
+                excessiveCheck: 0,
+                cvStatus: ''
+            };
+
+            const applyData = await fetchJson('https://testmongo.bdjobs.com/job-apply/api/JobSubsystem/JobApplyPost', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            });
+            if (applyData.statuscode === '1' || applyData.statuscode === 1) {
+                showToast('Job successfully applied.');
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1500);
+            } else {
+                showToast(sanitizeMessage(applyData.message) || 'Apply failed.');
+            }
+        } catch (error) {
+            console.error('Quick apply failed:', error);
+            showToast(sanitizeMessage(error && error.message ? error.message : 'Network error occurred.'));
+        } finally {
+            button.textContent = 'Quick Apply';
+            button.disabled = false;
+            button.style.opacity = '1';
+        }
+    }
+
+    function injectQuickApplyButton() {
+        if (!window.location.pathname.includes('/h/details/')) return;
+        if (document.getElementById('tm-quick-apply-btn')) return;
+
+        const applyNowBtn = document.querySelector('button[data-testid="applyNowBtn"]');
+        if (!applyNowBtn || !applyNowBtn.parentNode) return;
+
+        const jobId = getJobIdFromDetailsPage();
+        if (!jobId) return;
+
+        const quickApplyBtn = document.createElement('button');
+        quickApplyBtn.id = 'tm-quick-apply-btn';
+        quickApplyBtn.textContent = 'Quick Apply';
+        quickApplyBtn.className = 'bg-[#B32D7D] hover:bg-[#8f2464] max-h-[40px] text-white text-sm font-medium py-[11px] px-3 rounded cursor-pointer';
+
+        quickApplyBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            quickApply(jobId, quickApplyBtn);
+        });
+
+        applyNowBtn.parentNode.insertBefore(quickApplyBtn, applyNowBtn.nextSibling);
     }
 
     // Show confirmation modal before canceling application
@@ -160,7 +300,7 @@
 
     // API Call to cancel the application
     function cancelApplication(jobId, formValue, button) {
-        button.textContent = "Canceling...";
+        button.textContent = 'Canceling...';
         button.disabled = true;
         button.style.opacity = '0.7';
 
@@ -168,11 +308,11 @@
 
         // Using GM_xmlhttpRequest to avoid any potential Cross-Origin (CORS) issues
         GM_xmlhttpRequest({
-            method: "POST",
+            method: 'POST',
             url: apiUrl,
             headers: {
-                "Accept": "application/json",
-                "Content-Type": "application/json"
+                Accept: 'application/json',
+                'Content-Type': 'application/json'
             },
             onload: function (response) {
                 button.textContent = 'Cancel Application';
@@ -181,25 +321,25 @@
 
                 try {
                     const data = JSON.parse(response.responseText);
-                    showToast(data.message || "Action completed.");
+                    showToast(data.message || 'Action completed.');
 
                     // If successfully canceled, reload the page after a short delay
-                    if (data.statuscode === "1" || data.statuscode === 1) {
+                    if (data.statuscode === '1' || data.statuscode === 1) {
                         setTimeout(() => {
                             window.location.reload();
                         }, 1500);
                     }
                 } catch (e) {
-                    console.error("Error parsing JSON response:", e);
-                    showToast("Unexpected response from server.");
+                    console.error('Error parsing JSON response:', e);
+                    showToast('Unexpected response from server.');
                 }
             },
             onerror: function (err) {
-                console.error("API Request failed:", err);
+                console.error('API Request failed:', err);
                 button.textContent = 'Cancel Application';
                 button.disabled = false;
                 button.style.opacity = '1';
-                showToast("Network error occurred. Please try again.");
+                showToast('Network error occurred. Please try again.');
             }
         });
     }
@@ -226,7 +366,6 @@
             );
             const urlMatch = window.location.pathname.match(/\/details\/(\d+)/);
             jobId = urlMatch ? urlMatch[1] : null;
-
         } else if (isApplyNextPage) {
             // Logic for the /apply_position_next.asp page
             targetElement = document.querySelector('div.adeadline');
@@ -267,22 +406,22 @@
                 const formValue = getCookie('MybdjobsUserId');
 
                 if (!jobId) {
-                    showToast("Error: Could not extract Job ID from URL.");
+                    showToast('Error: Could not extract Job ID from URL.');
                     return;
                 }
 
                 if (!formValue) {
-                    showToast("Error: Could not extract MybdjobsUserId cookie.");
+                    showToast('Error: Could not extract MybdjobsUserId cookie.');
                     return;
                 }
 
                 // Fetch job details from API to get accurate title and company name
                 const apiUrl = `https://testmongo.bdjobs.com/job-apply/api/JobSubsystem/JobApply?jobID=${jobId}`;
                 GM_xmlhttpRequest({
-                    method: "GET",
+                    method: 'GET',
                     url: apiUrl,
                     headers: {
-                        "Accept": "application/json"
+                        Accept: 'application/json'
                     },
                     onload: function (response) {
                         let jobTitle = 'This Job';
@@ -290,12 +429,12 @@
 
                         try {
                             const data = JSON.parse(response.responseText);
-                            if (data.statuscode === "1" && data.data && data.data.JobData) {
+                            if (data.statuscode === '1' && data.data && data.data.JobData) {
                                 jobTitle = data.data.JobData.JobTitle || jobTitle;
                                 companyName = data.data.JobData.CompanyName || companyName;
                             }
                         } catch (e) {
-                            console.error("Error parsing job data:", e);
+                            console.error('Error parsing job data:', e);
                         }
 
                         // Show confirmation modal with fetched data
@@ -304,7 +443,7 @@
                         });
                     },
                     onerror: function (err) {
-                        console.error("Failed to fetch job details:", err);
+                        console.error('Failed to fetch job details:', err);
                         // Still show modal with default values
                         showConfirmationModal('This Job', 'This Company', () => {
                             cancelApplication(jobId, formValue, cancelBtn);
@@ -341,15 +480,15 @@
         const apiUrl = `https://testmongo.bdjobs.com/job-apply/api/JobSubsystem/JobApply?jobID=${jobId}`;
 
         GM_xmlhttpRequest({
-            method: "GET",
+            method: 'GET',
             url: apiUrl,
             headers: {
-                "Accept": "application/json"
+                Accept: 'application/json'
             },
             onload: function (response) {
                 try {
                     const res = JSON.parse(response.responseText);
-                    if (res.statuscode === "1" && res.data && res.data.JobData) {
+                    if (res.statuscode === '1' && res.data && res.data.JobData) {
                         const jd = res.data.JobData;
 
                         const infinitySpan = '<span style="font-size: 18px;">&infin;</span>';
@@ -377,7 +516,7 @@
                             <ul class="ml-6 list-none grid grid-cols-1 sm:grid sm:grid-cols-2 md:grid md:grid-cols-2 sm:gap-1 md:gap-2 gap-2 summary-des text-sm font-normal text-[#333]">
                                 <li class="flex gap-1 items-center">
                                     <span class="min-w-fit">Salary Range:</span>
-                                    <span class="font-semibold">Tk. ${formatMinVal(jd.MinimumSalary)} ${jd.MaximumSalary !== -1 ? `- ${formatMaxVal(jd.MaximumSalary)}` : ""}  (Monthly)</span>
+                                    <span class="font-semibold">Tk. ${formatMinVal(jd.MinimumSalary)} ${jd.MaximumSalary !== -1 ? `- ${formatMaxVal(jd.MaximumSalary)}` : ''}  (Monthly)</span>
                                 </li>
                                 <li class="flex gap-1 items-center">
                                     <span class="min-w-fit">Required Gender:</span>
@@ -419,6 +558,7 @@
     // to detect when the UI updates and the element is rendered.
     const observer = new MutationObserver(() => {
         injectCancelButton();
+        injectQuickApplyButton();
 
         // Also try to inject the extra data box if on the details page
         if (window.location.pathname.includes('/h/details/')) {
@@ -434,6 +574,7 @@
     // Also try running it once on initial load just in case
     setTimeout(() => {
         injectCancelButton();
+        injectQuickApplyButton();
         if (window.location.pathname.includes('/h/details/')) {
             const urlMatch = window.location.pathname.match(/\/details\/(\d+)/);
             if (urlMatch && urlMatch[1]) {
