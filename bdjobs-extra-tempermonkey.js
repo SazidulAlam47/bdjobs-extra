@@ -118,6 +118,136 @@
         }, 3000);
     }
 
+    function showMatchingScoreModal(matchingScore, onOk) {
+        const overlay = document.createElement('div');
+        Object.assign(overlay.style, {
+            position: 'fixed',
+            top: '0',
+            left: '0',
+            width: '100%',
+            height: '100%',
+            backgroundColor: 'rgba(16, 24, 40, 0.55)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: '100001',
+            padding: '16px'
+        });
+
+        const modal = document.createElement('div');
+        Object.assign(modal.style, {
+            backgroundColor: '#FCF3FA',
+            border: '1px solid #E4E7EC',
+            borderRadius: '14px',
+            padding: '28px 26px 24px',
+            maxWidth: '520px',
+            width: '100%',
+            boxShadow: '0 18px 40px rgba(16, 24, 40, 0.22)',
+            fontFamily: 'Arial, sans-serif',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            textAlign: 'center'
+        });
+
+        const iconWrap = document.createElement('div');
+        Object.assign(iconWrap.style, {
+            width: '76px',
+            height: '76px',
+            borderRadius: '50%',
+            backgroundColor: '#3468A8',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            marginBottom: '18px',
+            boxShadow: '0 6px 18px rgba(52, 104, 168, 0.35)'
+        });
+
+        const check = document.createElement('div');
+        check.textContent = '✓';
+        Object.assign(check.style, {
+            color: '#fff',
+            fontSize: '44px',
+            fontWeight: '800',
+            lineHeight: '1'
+        });
+        iconWrap.appendChild(check);
+
+        const title = document.createElement('h3');
+        title.textContent = 'Congratulations!';
+        Object.assign(title.style, {
+            margin: '0 0 10px 0',
+            fontSize: '40px',
+            fontWeight: '800',
+            color: '#101828',
+            lineHeight: '1.15',
+            letterSpacing: '-0.02em'
+        });
+
+        const subtitle = document.createElement('p');
+        subtitle.textContent = 'You have successfully submitted your application.';
+        Object.assign(subtitle.style, {
+            margin: '0 0 16px 0',
+            fontSize: '20px',
+            color: '#475467',
+            lineHeight: '1.45',
+            maxWidth: '430px'
+        });
+
+        const scoreText = document.createElement('p');
+        scoreText.textContent = `Job Matching Score: ${matchingScore}%`;
+        Object.assign(scoreText.style, {
+            margin: '2px 0 22px 0',
+            fontSize: '20px',
+            fontWeight: '800',
+            color: '#B32D7D',
+            lineHeight: '1.2',
+            letterSpacing: '-0.01em'
+        });
+
+        const okBtn = document.createElement('button');
+        okBtn.textContent = 'OK';
+        Object.assign(okBtn.style, {
+            border: 'none',
+            backgroundColor: '#B32D7D',
+            color: '#fff',
+            borderRadius: '8px',
+            padding: '12px 34px',
+            fontSize: '16px',
+            fontWeight: '700',
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            minWidth: '120px',
+            boxShadow: '0 8px 20px rgba(179, 45, 125, 0.35)',
+            transition: 'background-color 0.2s ease, transform 0.2s ease'
+        });
+
+        okBtn.addEventListener('mouseover', () => {
+            okBtn.style.backgroundColor = '#982466';
+            okBtn.style.transform = 'translateY(-1px)';
+        });
+
+        okBtn.addEventListener('mouseout', () => {
+            okBtn.style.backgroundColor = '#B32D7D';
+            okBtn.style.transform = 'translateY(0)';
+        });
+
+        okBtn.addEventListener('click', () => {
+            overlay.remove();
+            onOk();
+        });
+
+        modal.appendChild(iconWrap);
+        modal.appendChild(title);
+        modal.appendChild(subtitle);
+        modal.appendChild(scoreText);
+        modal.appendChild(okBtn);
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+    }
+
     async function quickApply(jobId, button) {
         button.textContent = 'Applying...';
         button.disabled = true;
@@ -182,9 +312,11 @@
             });
             if (applyData.statuscode === '1' || applyData.statuscode === 1) {
                 showToast('Job successfully applied.');
-                setTimeout(() => {
+                const rawScore = applyData && applyData.data ? applyData.data.matchingScore : null;
+                const matchingScore = Number.isFinite(Number(rawScore)) ? Number(rawScore) : 0;
+                showMatchingScoreModal(matchingScore, () => {
                     window.location.reload();
-                }, 1500);
+                });
             } else {
                 showToast(sanitizeMessage(applyData.message) || 'Apply failed.');
             }
