@@ -6,7 +6,6 @@
 // @icon         https://bdjobs.com/h/favicon.ico
 // @author       You
 // @match        *://*.bdjobs.com/*
-// @grant        GM_xmlhttpRequest
 // ==/UserScript==
 
 (function () {
@@ -29,6 +28,12 @@
         if (!message) return 'Unknown error.';
         return String(message).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
     }
+
+    const jobApplyCache = {
+        key: null,
+        data: null,
+        pending: null
+    };
 
     async function fetchJson(url, options = {}) {
         const response = await fetch(url, {
@@ -53,6 +58,31 @@
         }
 
         return json;
+    }
+
+    async function getJobApplyData(jobId, formValue) {
+        const key = `${jobId}::${formValue || ''}`;
+
+        if (jobApplyCache.data && jobApplyCache.key === key) {
+            return jobApplyCache.data;
+        }
+
+        if (jobApplyCache.pending && jobApplyCache.key === key) {
+            return jobApplyCache.pending;
+        }
+
+        const url = `https://testmongo.bdjobs.com/job-apply/api/JobSubsystem/JobApply?jobID=${jobId}&formValue=${encodeURIComponent(formValue || '')}`;
+        jobApplyCache.key = key;
+        jobApplyCache.pending = fetchJson(url)
+            .then((data) => {
+                jobApplyCache.data = data;
+                return data;
+            })
+            .finally(() => {
+                jobApplyCache.pending = null;
+            });
+
+        return jobApplyCache.pending;
     }
 
     // Helper function to show a temporary toast message
@@ -94,7 +124,6 @@
         button.style.opacity = '0.7';
 
         const formValue = getCookie('MybdjobsUserId');
-        console.log({ formValue });
 
         if (!jobId) {
             showToast('Error: Could not extract Job ID from URL.');
@@ -113,7 +142,7 @@
         }
 
         try {
-            const jobData = await fetchJson(`https://testmongo.bdjobs.com/job-apply/api/JobSubsystem/JobApply?jobID=${jobId}&formValue=${encodeURIComponent(formValue)}`);
+            const jobData = await getJobApplyData(jobId, formValue);
 
             const jobApiData = jobData && jobData.data && jobData.data.JobData ? jobData.data.JobData : null;
             const userApiData = jobData && jobData.data && jobData.data.UserData ? jobData.data.UserData : null;
@@ -299,49 +328,37 @@
     }
 
     // API Call to cancel the application
-    function cancelApplication(jobId, formValue, button) {
+    async function cancelApplication(jobId, formValue, button) {
         button.textContent = 'Canceling...';
         button.disabled = true;
         button.style.opacity = '0.7';
 
         const apiUrl = `https://testmongo.bdjobs.com/job-apply/api/JobSubsystem/UndoJobApply?JobID=${jobId}&FormValue=${encodeURIComponent(formValue)}`;
 
-        // Using GM_xmlhttpRequest to avoid any potential Cross-Origin (CORS) issues
-        GM_xmlhttpRequest({
-            method: 'POST',
-            url: apiUrl,
-            headers: {
-                Accept: 'application/json',
-                'Content-Type': 'application/json'
-            },
-            onload: function (response) {
-                button.textContent = 'Cancel Application';
-                button.disabled = false;
-                button.style.opacity = '1';
-
-                try {
-                    const data = JSON.parse(response.responseText);
-                    showToast(data.message || 'Action completed.');
-
-                    // If successfully canceled, reload the page after a short delay
-                    if (data.statuscode === '1' || data.statuscode === 1) {
-                        setTimeout(() => {
-                            window.location.reload();
-                        }, 1500);
-                    }
-                } catch (e) {
-                    console.error('Error parsing JSON response:', e);
-                    showToast('Unexpected response from server.');
+        try {
+            const data = await fetchJson(apiUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
                 }
-            },
-            onerror: function (err) {
-                console.error('API Request failed:', err);
-                button.textContent = 'Cancel Application';
-                button.disabled = false;
-                button.style.opacity = '1';
-                showToast('Network error occurred. Please try again.');
+            });
+
+            showToast(data.message || 'Action completed.');
+
+            // If successfully canceled, reload the page after a short delay
+            if (data.statuscode === '1' || data.statuscode === 1) {
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1500);
             }
-        });
+        } catch (err) {
+            console.error('API Request failed:', err);
+            showToast('Network error occurred. Please try again.');
+        } finally {
+            button.textContent = 'Cancel Application';
+            button.disabled = false;
+            button.style.opacity = '1';
+        }
     }
 
     // Function to find the original button and inject ours
@@ -416,40 +433,28 @@
                 }
 
                 // Fetch job details from API to get accurate title and company name
-                const apiUrl = `https://testmongo.bdjobs.com/job-apply/api/JobSubsystem/JobApply?jobID=${jobId}`;
-                GM_xmlhttpRequest({
-                    method: 'GET',
-                    url: apiUrl,
-                    headers: {
-                        Accept: 'application/json'
-                    },
-                    onload: function (response) {
+                getJobApplyData(jobId, formValue)
+                    .then((data) => {
                         let jobTitle = 'This Job';
                         let companyName = 'This Company';
 
-                        try {
-                            const data = JSON.parse(response.responseText);
-                            if (data.statuscode === '1' && data.data && data.data.JobData) {
-                                jobTitle = data.data.JobData.JobTitle || jobTitle;
-                                companyName = data.data.JobData.CompanyName || companyName;
-                            }
-                        } catch (e) {
-                            console.error('Error parsing job data:', e);
+                        if (data.statuscode === '1' && data.data && data.data.JobData) {
+                            jobTitle = data.data.JobData.JobTitle || jobTitle;
+                            companyName = data.data.JobData.CompanyName || companyName;
                         }
 
                         // Show confirmation modal with fetched data
                         showConfirmationModal(jobTitle, companyName, () => {
                             cancelApplication(jobId, formValue, cancelBtn);
                         });
-                    },
-                    onerror: function (err) {
+                    })
+                    .catch((err) => {
                         console.error('Failed to fetch job details:', err);
                         // Still show modal with default values
                         showConfirmationModal('This Job', 'This Company', () => {
                             cancelApplication(jobId, formValue, cancelBtn);
                         });
-                    }
-                });
+                    });
             });
 
             // Insert exactly after the targeted element
@@ -477,81 +482,67 @@
         // Insert right after the allSection element
         allSection.parentNode.insertBefore(box, allSection.nextSibling);
 
-        const apiUrl = `https://testmongo.bdjobs.com/job-apply/api/JobSubsystem/JobApply?jobID=${jobId}`;
+        const formValue = getCookie('MybdjobsUserId');
 
-        GM_xmlhttpRequest({
-            method: 'GET',
-            url: apiUrl,
-            headers: {
-                Accept: 'application/json'
-            },
-            onload: function (response) {
-                try {
-                    const res = JSON.parse(response.responseText);
-                    if (res.statuscode === '1' && res.data && res.data.JobData) {
-                        const jd = res.data.JobData;
+        getJobApplyData(jobId, formValue)
+            .then((res) => {
+                if (res.statuscode === '1' && res.data && res.data.JobData) {
+                    const jd = res.data.JobData;
 
-                        const infinitySpan = '<span style="font-size: 18px;">&infin;</span>';
+                    const infinitySpan = '<span style="font-size: 18px;">&infin;</span>';
 
-                        // Helper to format values (returns HTML with infinity symbol in larger font)
-                        const formatMaxVal = (val) => val === -1 ? infinitySpan : val;
-                        const formatMinVal = (val) => val === -1 ? '0' : val;
+                    // Helper to format values (returns HTML with infinity symbol in larger font)
+                    const formatMaxVal = (val) => val === -1 ? infinitySpan : val;
+                    const formatMinVal = (val) => val === -1 ? '0' : val;
 
-                        // Helper to format gender abbreviations to full names
-                        const formatGender = (gender) => {
-                            if (!gender || !String(gender).trim()) return 'Not specified';
-                            return gender
-                                .split(',')
-                                .map(g => {
-                                    const trimmed = g.trim();
-                                    if (trimmed === 'M') return 'Male';
-                                    if (trimmed === 'F') return 'Female';
-                                    return trimmed;
-                                })
-                                .join(' and ');
-                        };
+                    // Helper to format gender abbreviations to full names
+                    const formatGender = (gender) => {
+                        if (!gender || !String(gender).trim()) return 'Not specified';
+                        return gender
+                            .split(',')
+                            .map(g => {
+                                const trimmed = g.trim();
+                                if (trimmed === 'M') return 'Male';
+                                if (trimmed === 'F') return 'Female';
+                                return trimmed;
+                            })
+                            .join(' and ');
+                    };
 
-                        box.innerHTML = `
-                            <h3 class="mb-2.5 text-[#B32D7D] text-base font-semibold"> Extra Job Details </h3>
-                            <ul class="ml-6 list-none grid grid-cols-1 sm:grid sm:grid-cols-2 md:grid md:grid-cols-2 sm:gap-1 md:gap-2 gap-2 summary-des text-sm font-normal text-[#333]">
-                                <li class="flex gap-1 items-center">
-                                    <span class="min-w-fit">Salary Range:</span>
-                                    <span class="font-semibold">Tk. ${formatMinVal(jd.MinimumSalary)} ${jd.MaximumSalary !== -1 ? `- ${formatMaxVal(jd.MaximumSalary)}` : ''}  (Monthly)</span>
-                                </li>
-                                <li class="flex gap-1 items-center">
-                                    <span class="min-w-fit">Required Gender:</span>
-                                    <span class="font-semibold">${formatGender(jd.RequiredGender)}</span>
-                                </li>
-                                <li class="flex gap-1 items-center">
-                                    <span class="min-w-fit">Experience Range:</span>
-                                    <span class="font-semibold">${formatMinVal(jd.RequiredMinimumExperience)} to ${formatMaxVal(jd.RequiredMaximumExperience)} years</span>
-                                </li>
-                                <li class="flex gap-1 items-center">
-                                    <span class="min-w-fit">Age Range:</span>
-                                    <span class="font-semibold">${formatMinVal(jd.RequiredMinimumAge)} to ${formatMaxVal(jd.RequiredMaximumAge)} years</span>
-                                </li>
-                            </ul>
-                        `;
-                    } else {
-                        box.innerHTML = `
-                            <h3 class="mb-2.5 text-[#B32D7D] text-base font-semibold"> Extra Job Details </h3>
-                            <p class="text-sm text-red-500">Failed to load extra data.</p>
-                        `;
-                    }
-                } catch (e) {
                     box.innerHTML = `
                         <h3 class="mb-2.5 text-[#B32D7D] text-base font-semibold"> Extra Job Details </h3>
-                        <p class="text-sm text-red-500">Error parsing extra data.</p>
+                        <ul class="ml-6 list-none grid grid-cols-1 sm:grid sm:grid-cols-2 md:grid md:grid-cols-2 sm:gap-1 md:gap-2 gap-2 summary-des text-sm font-normal text-[#333]">
+                            <li class="flex gap-1 items-center">
+                                <span class="min-w-fit">Salary Range:</span>
+                                <span class="font-semibold">Tk. ${formatMinVal(jd.MinimumSalary)} ${jd.MaximumSalary !== -1 ? `- ${formatMaxVal(jd.MaximumSalary)}` : ''}  (Monthly)</span>
+                            </li>
+                            <li class="flex gap-1 items-center">
+                                <span class="min-w-fit">Required Gender:</span>
+                                <span class="font-semibold">${formatGender(jd.RequiredGender)}</span>
+                            </li>
+                            <li class="flex gap-1 items-center">
+                                <span class="min-w-fit">Experience Range:</span>
+                                <span class="font-semibold">${formatMinVal(jd.RequiredMinimumExperience)} to ${formatMaxVal(jd.RequiredMaximumExperience)} years</span>
+                            </li>
+                            <li class="flex gap-1 items-center">
+                                <span class="min-w-fit">Age Range:</span>
+                                <span class="font-semibold">${formatMinVal(jd.RequiredMinimumAge)} to ${formatMaxVal(jd.RequiredMaximumAge)} years</span>
+                            </li>
+                        </ul>
+                    `;
+                } else {
+                    box.innerHTML = `
+                        <h3 class="mb-2.5 text-[#B32D7D] text-base font-semibold"> Extra Job Details </h3>
+                        <p class="text-sm text-red-500">Failed to load extra data.</p>
                     `;
                 }
-            },
-            onerror: function (err) {
+            })
+            .catch(() => {
                 box.innerHTML = `
                     <h3 class="mb-2.5 text-[#B32D7D] text-base font-semibold"> Extra Job Details </h3>
                     <p class="text-sm text-red-500">Network error fetching data.</p>
                 `;
-            }
-        });
+            });
     }
 
     // Bdjobs is likely a Single Page Application (SPA), so we use a MutationObserver
