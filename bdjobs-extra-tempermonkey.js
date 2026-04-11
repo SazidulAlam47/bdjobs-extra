@@ -377,7 +377,7 @@
                             <ul class="ml-6 list-none grid grid-cols-1 sm:grid sm:grid-cols-2 md:grid md:grid-cols-2 sm:gap-1 md:gap-2 gap-2 summary-des text-sm font-normal text-[#333]">
                                 <li class="flex gap-1 items-center">
                                     <span class="min-w-fit">Salary Range:</span>
-                                    <span class="font-semibold">Tk. ${formatMinVal(jd.MinimumSalary)} - ${formatMaxVal(jd.MaximumSalary)} (Monthly)</span>
+                                    <span class="font-semibold">Tk. ${formatMinVal(jd.MinimumSalary)} ${jd.MaximumSalary !== -1 ? `- ${formatMaxVal(jd.MaximumSalary)}` : ""}  (Monthly)</span>
                                 </li>
                                 <li class="flex gap-1 items-center">
                                     <span class="min-w-fit">Required Gender:</span>
